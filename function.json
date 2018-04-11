@@ -1,0 +1,12 @@
+{
+    "bindings": [
+        {
+        "queueName": "test1",
+        "connection": "Endpoint=sb://function-dequeuer-bus.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=tAITq/0PB5gvGS5FYcagimv/DgsKrvvYBqeT2J4DoEk=",
+        "name": "message",
+        "type": "serviceBusTrigger",
+        "direction": "in"
+        }
+    ],
+    "disabled": false
+    }
