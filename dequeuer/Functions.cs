@@ -26,6 +26,8 @@ namespace dequeuer
             using (HttpRequestMessage request = new HttpRequestMessage())
             using (ByteArrayContent byteArrayContent = new ByteArrayContent(Encoding.UTF8.GetBytes(message.GetBody<string>())))
             {
+                httpClient.BaseAddress = new Uri(Environment.GetEnvironmentVariable("apiBaseAddress") ?? throw new InvalidOperationException("apiBaseAddress was null"));
+
                 byteArrayContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
                 request.RequestUri = new Uri("/api/messages");
