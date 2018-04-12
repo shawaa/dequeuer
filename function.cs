@@ -5,7 +5,7 @@ using Microsoft.ServiceBus.Messaging;
 
 [FunctionName("dequeuer")]                    
 public static void Run(
-    [ServiceBusTrigger("test1", Connection = "Endpoint=sb://function-dequeuer-bus.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=tAITq/0PB5gvGS5FYcagimv/DgsKrvvYBqeT2J4DoEk=")] 
+    [ServiceBusTrigger("test1", AccessRights.Manage, Connection = "Endpoint=sb://function-dequeuer-bus.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=tAITq/0PB5gvGS5FYcagimv/DgsKrvvYBqeT2J4DoEk=")] 
     string myQueueItem, 
     TraceWriter log)
 {
