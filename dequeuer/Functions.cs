@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading.Tasks;
 using System.Web;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
@@ -14,11 +15,19 @@ namespace dequeuer
 {
     public static class Functions
     {
-        [FunctionName("dequeuer")]
-        public static void Run(
-        [ServiceBusTrigger("test1", AccessRights.Manage, Connection = "sbConnection")]
+        [FunctionName("nmCommandDequeuer")]
+        public static async Task RunHrmCommandDequeuer(
+            [ServiceBusTrigger("command-nm", AccessRights.Listen, Connection = "sbConnection")]
             BrokeredMessage message,
             TraceWriter log)
+        {
+            await SendMessage(message, log, "notifications/messages/inbox/commands");
+        }
+
+        private static async Task SendMessage(
+            BrokeredMessage message,
+            TraceWriter log,
+            string messageInbox)
         {
             log.Info("C# ServiceBus queue trigger function processed message");
 
@@ -26,32 +35,35 @@ namespace dequeuer
             using (HttpRequestMessage request = new HttpRequestMessage())
             using (ByteArrayContent byteArrayContent = new ByteArrayContent(Encoding.UTF8.GetBytes(message.GetBody<string>())))
             {
-                httpClient.BaseAddress = new Uri(Environment.GetEnvironmentVariable("apiBaseAddress") ?? throw new InvalidOperationException("apiBaseAddress was null"));
+                string baseUri = Environment.GetEnvironmentVariable("apiBaseAddress") ?? throw new InvalidOperationException("apiBaseAddress was null");
+                httpClient.BaseAddress = new Uri(baseUri);
 
                 byteArrayContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
-                request.RequestUri = new Uri("/api/messages");
+                request.RequestUri = new Uri(messageInbox, UriKind.Relative);
                 request.Method = HttpMethod.Post;
                 request.Content = byteArrayContent;
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetToken());
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await GetToken());
                 request.Headers.Add("TenantCode", message.Properties["TenantCode"].ToString());
                 request.Headers.Add("EnvironmentCode", message.Properties["EnvironmentCode"].ToString());
                 request.Headers.Add("CorrelationId", message.Properties["CorrelationId"].ToString());
                 request.Headers.Add("MessageVersion", message.Properties.ContainsKey("MessageVersion") ? message.Properties["MessageVersion"].ToString() : null);
 
-                HttpResponseMessage response = httpClient.SendAsync(request).Result;
+                HttpResponseMessage response = await httpClient.SendAsync(request);
 
-                log.Info(FormattableString.Invariant($"Message [{message.Properties["MessageId"].ToString()}] posted, and got response [{response.StatusCode}]"));
+                log.Info(FormattableString.Invariant($"Message [{message.Properties["PFMessageId"].ToString()}] posted, and got response [{response.StatusCode}]"));
 
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
-                    throw new InvalidOperationException(FormattableString.Invariant($"Message [{message.Properties["MessageId"].ToString()}] was not processed"));
+                    throw new InvalidOperationException(FormattableString.Invariant($"Message [{message.Properties["PFMessageId"].ToString()}] was not processed"));
                 }
+
+                await message.CompleteAsync();
             }
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2202:Do not dispose objects multiple times", Justification = "Disposing of objects is happening correctly.")]
-        public static string GetToken()
+        private static async Task<string> GetToken()
         {
             string resource = Environment.GetEnvironmentVariable("authResource");
             string clientId = Environment.GetEnvironmentVariable("authclientId"); ;
@@ -72,13 +84,13 @@ namespace dequeuer
                 stream.Write(requestData, 0, requestData.Length);
             }
 
-            HttpWebResponse httpWebResponse = (HttpWebResponse)webRequest.GetResponse();
+            HttpWebResponse httpWebResponse = (HttpWebResponse)(await webRequest.GetResponseAsync());
 
             using (Stream responseStream = httpWebResponse.GetResponseStream())
             {
                 using (StreamReader reader = new StreamReader(responseStream))
                 {
-                    string response = reader.ReadToEnd();
+                    string response = await reader.ReadToEndAsync();
                     return JObject.Parse(response).SelectToken("access_token").ToString();
                 }
             }
